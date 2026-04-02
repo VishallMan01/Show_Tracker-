@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from schema import ShowCreate, ShowResponse
 
 app = FastAPI()
 
@@ -36,8 +37,8 @@ shows: list[dict] = [
 },
 ]
 
-@app.get("/")
-@app.get("/shows")
+@app.get("/", include_in_schema=False)
+@app.get("/shows", include_in_schema=False)
 def root(request: Request):
     return templates.TemplateResponse(
         request, 
@@ -58,11 +59,24 @@ def show_page(request: Request, show_id: int):
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show was not found")
 
 
-@app.get("/api/shows")
+@app.get("/api/shows", response_model=list[ShowResponse])
 def get_shows():
     return shows
 
-@app.get("/api/shows/{show_id}")
+@app.post("/api/shows", response_model=ShowResponse, status_code=status.HTTP_201_CREATED)
+def create_show(show: ShowCreate):
+    new_id = max(s["id"] for s in shows) + 1 if shows else 1
+    new_show = {
+        "id": new_id,
+        "name": show.name,
+        "watch_status": show.watch_status,
+        "completeness": show.completeness,
+        "review": show.review,
+    }
+    shows.append(new_show)
+    return new_show
+
+@app.get("/api/shows/{show_id}", response_model=ShowResponse)
 def get_show(show_id: int):
     for show in shows:
         if show.get("id") == show_id:
