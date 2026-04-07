@@ -3,18 +3,18 @@
   <article class="content-section py-3 px-4 mb-4">
     <div class="d-flex align-items-start gap-4">
       <img class="rounded-circle article-img flex-shrink-0"
-           src="{{ url_for('static', path='profile_pics/default.jpg') }}"
-           alt="{{ show.name }}'s profile picture"
+           src="{{ show.author.image_path }}"
+           alt="{{ show.author.username }}'s profile picture"
            width="64"
            height="64"
            loading="lazy">
       <div class="flex-grow-1">
         <div class="article-metadata mb-2">
-          <a class="me-2" href="#">{{ show.name }}</a>
-          <small class="text-body-secondary">{{ show.name }}</small>
+          <a class="me-2" href="{{ url_for("user_shows", user_id=show.author.id) }}">{{ show.author.username }}</a>
+          <small class="text-body-secondary">{{ show.date_posted.strftime("%B %d, %Y") }}</small>
         </div>
         <h2 class="article-title">{{ show.name }}</h2>
-        <p class="article-content">{{ show.watch_status }}</p>
+        <p class="article-content">{{ show.review }}</p>
         <!-- Only show edit/delete options if the user is the author -->
         <!-- TODO: Add user authentication and authorization -->
         <div class="post-actions mt-3 pt-3 border-top">

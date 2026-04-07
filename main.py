@@ -1,57 +1,47 @@
-from fastapi import FastAPI, Request, HTTPException, status
+from typing import Annotated
+
+from fastapi import FastAPI, Request, HTTPException, status, Depends 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from schema import ShowCreate, ShowResponse
+
+import models
+from database import Base, engine, get_db
+from schema import ShowCreate, ShowResponse, UserCreate, UserResponse
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/media", StaticFiles(directory="media"), name="media")
 
 templates = Jinja2Templates(directory="templates")
 
-shows: list[dict] = [
-
-{
-    "id": 1,
-    "name": "Attack on Titan",
-    "watch_status": "Watched",
-    "completeness": "Complete",
-    "review": "4 our of 5 stars I like the show"
-},
-{
-    "id": 2,
-    "name": "Naruto",
-    "watch_status": "Watched",
-    "completeness": "Complete",
-    "review": "Best show of my life"
-},
-{
-    "id": 3,
-    "name": "Solo Leveling",
-    "watch_status": "want to watch",
-    "completeness": "On-going",
-    "review": ""
-},
-]
 
 @app.get("/", include_in_schema=False)
 @app.get("/shows", include_in_schema=False)
-def root(request: Request):
+def root(request: Request, db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.Show))
+    shows = result.scalars().all()
     return templates.TemplateResponse(
         request, 
         "home.html", 
         {"shows": shows, "name": "Home"},
     )
 
+
 @app.get("/shows/{show_id}", include_in_schema=False)
-def show_page(request: Request, show_id: int):
-    for show in shows:
-        if show.get("id") == show_id:
-            title = show.get("name")
-            return templates.TemplateResponse(
+def show_page(request: Request, show_id: int, db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.Show).where(models.Show.id == show_id))
+    show = result.scalars().first()
+    if show:
+        title = show.name
+        return templates.TemplateResponse(
             request, 
             "show.html", 
             {"show": show, "name": title},
@@ -59,29 +49,105 @@ def show_page(request: Request, show_id: int):
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show was not found")
 
 
-@app.get("/api/shows", response_model=list[ShowResponse])
-def get_shows():
+@app.get("/users/{user_id}/shows", include_in_schema=False, name="user_shows") 
+def user_post_page(user_id: int, db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.User).where(models.User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found") 
+    
+    result = db.execute(select(models.Show).where(models.Show.user_id == user_id))
+    shows = result.scalars().all()
+    return templates.TemplateResponse(
+        request, 
+        "user_shows.html", 
+        {"shows": shows, "user": user, "name": f"{user.username}'s Shows"},
+    )
+
+
+@app.post("/api/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def create_user(user: UserCreate, db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.User).where(models.User.username == user.username))
+    existing_user = result.scalars().first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already exists")
+    
+    result = db.execute(select(models.User).where(models.User.email == user.email))
+    existing_email = result.scalars().first()
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already exists")
+    
+    new_user = models.User(
+        username=user.username,
+        email=user.email,
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+
+@app.get("/api/users/{user_id}", response_model=UserResponse)
+def get_user(user_id: int, db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.User).where(models.User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
+
+@app.get("/api/users/{user_id}/shows", response_model=list[ShowResponse])
+def get_user_shows(user_id: int, db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.Show).where(models.Show.user_id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found") 
+    
+    result = db.execute(select(models.Show).where(models.Show.user_id == user_id))
+    shows = result.scalars().all()
     return shows
 
+
+@app.get("/api/shows", response_model=list[ShowResponse])
+def get_shows(db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.Show))
+    shows = result.scalars().all()
+    return shows
+
+
 @app.post("/api/shows", response_model=ShowResponse, status_code=status.HTTP_201_CREATED)
-def create_show(show: ShowCreate):
-    new_id = max(s["id"] for s in shows) + 1 if shows else 1
-    new_show = {
-        "id": new_id,
-        "name": show.name,
-        "watch_status": show.watch_status,
-        "completeness": show.completeness,
-        "review": show.review,
-    }
-    shows.append(new_show)
+def create_show(show: ShowCreate, db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.User).where(models.User.id == show.user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    new_show = models.Show(
+        name=show.name,
+        watch_status=show.watch_status,
+        completeness=show.completeness,
+        review=show.review,
+        user_id=show.user_id,
+    )
+    db.add(new_show)
+    db.commit()
+    db.refresh(new_show)
     return new_show
 
+
 @app.get("/api/shows/{show_id}", response_model=ShowResponse)
-def get_show(show_id: int):
-    for show in shows:
-        if show.get("id") == show_id:
-            return show
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show was not found")
+def get_show(show_id: int, db: Annotated[Session, Depends(get_db)]):
+    result = db.execute(select(models.Show).where(models.Show.id == show_id))
+    show = result.scalars().first()
+    if not show:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show not found")
+    return show
 
 
 @app.exception_handler(StarletteHTTPException)

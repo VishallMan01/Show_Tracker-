@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {% block content %}
+  <h1 class="mb-4">Shows by {{ user.username }}</h1>
   {% for show in shows %}
     <article class="content-section py-3 px-4 mb-4">
       <div class="d-flex align-items-start gap-4">
@@ -11,15 +12,19 @@
              loading="lazy">
         <div class="flex-grow-1">
           <div class="article-metadata mb-2">
-            <a class="me-2" href="{{ url_for("user_shows", user_id=show.author.id) }}">{{ show.author.username }}</a>
+            <a class="me-2"
+               href="{{ url_for('user_shows', user_id=show.author.id) }}">{{ show.author.username }}</a>
             <small class="text-body-secondary">{{ show.date_posted.strftime("%B %d, %Y") }}</small>
           </div>
           <h2>
-            <a class="article-title" href="{{ url_for("show_page", show_id=show.id) }}">{{ show.name }}</a>
+            <a class="article-title"
+               href="{{ url_for('show_page', show_id=show.id) }}">{{ show.title }}</a>
           </h2>
           <p class="article-content">{{ show.review }}</p>
         </div>
       </div>
     </article>
+  {% else %}
+    <p class="text-body-secondary">No shows by this user yet.</p>
   {% endfor %}
 {% endblock content %}
