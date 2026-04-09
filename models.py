@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 
 from database import Base
 
@@ -20,8 +19,8 @@ class User(Base):
         nullable=True,
         default=None,
     )
-    shows: Mapped[list["Show"]] = relationship(back_populates="author")
 
+    shows: Mapped[list["Show"]] = relationship(back_populates="author", cascade="all, delete-orphan")
 
     @property
     def image_path(self) -> str:
@@ -35,7 +34,7 @@ class Show(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="want_to_watch")
+    watch_status: Mapped[str] = mapped_column(String(20), nullable=False, default="want_to_watch")
     completeness: Mapped[str] = mapped_column(String(20), nullable=False, default="on-going")
     review: Mapped[str] = mapped_column(Text, nullable=True)
     user_id: Mapped[int] = mapped_column(
