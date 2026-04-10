@@ -19,6 +19,7 @@ class User(Base):
         nullable=True,
         default=None,
     )
+    password_hash: Mapped[str] = mapped_column(String(128), nullable=False)
 
     shows: Mapped[list["Show"]] = relationship(back_populates="author", cascade="all, delete-orphan")
 

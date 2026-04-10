@@ -14,11 +14,12 @@
           <div class="article-metadata mb-2">
             <a class="me-2"
                href="{{ url_for('user_shows', user_id=show.author.id) }}">{{ show.author.username }}</a>
-            <small class="text-body-secondary">{{ show.date_posted.strftime("%B %d, %Y") }}</small>
+            <small class="text-body-secondary">{{ show.watch_status }}</small>
           </div>
           <h2>
             <a class="article-title"
                href="{{ url_for('show_page', show_id=show.id) }}">{{ show.name }}</a>
+            <small class="text-body-secondary fs-6">{{ show.completeness }}</small>
           </h2>
           <p class="article-content">{{ show.review }}</p>
         </div>

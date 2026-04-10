@@ -14,7 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import models
 from database import Base, engine, get_db
-from schema import ShowCreate, ShowResponse, ShowUpdate, UserCreate, UserResponse, UserUpdate
+from routers import shows, users
 
 
 @asynccontextmanager
@@ -32,18 +32,24 @@ app.mount("/media", StaticFiles(directory="media"), name="media")
 
 templates = Jinja2Templates(directory="templates")
 
+app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(shows.router, prefix="/api/shows", tags=["shows"])
+
 
 @app.get("/", include_in_schema=False)
 @app.get("/shows", include_in_schema=False)
 async def root(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.Show).options(selectinload(models.Show.author)))
+    result = await db.execute(
+            select(models.Show)
+            .options(selectinload(models.Show.author))
+            .order_by(models.Show.date_posted.desc()),
+            )
     shows = result.scalars().all()
     return templates.TemplateResponse(
         request, 
         "home.html", 
         {"shows": shows, "name": "Home"},
     )
-
 
 @app.get("/shows/{show_id}", include_in_schema=False)
 async def show_page(request: Request, show_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
@@ -70,190 +76,18 @@ async def user_post_page(request: Request, user_id: int, db: Annotated[AsyncSess
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found") 
     
-    result = await db.execute(select(models.Show).options(selectinload(models.Show.author)).where(models.Show.user_id == user_id))
+    result = await db.execute(
+        select(models.Show)
+        .options(selectinload(models.Show.author))
+        .where(models.Show.user_id == user_id)
+        .order_by(models.Show.date_posted.desc()),
+    )
     shows = result.scalars().all()
     return templates.TemplateResponse(
         request, 
         "user_shows.html", 
         {"shows": shows, "user": user, "name": f"{user.username}'s Shows"},
     )
-
-
-@app.post("/api/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def create_user(user: UserCreate, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.User).where(models.User.username == user.username))
-    existing_user = result.scalars().first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already exists")
-    
-    result = await db.execute(select(models.User).where(models.User.email == user.email))
-    existing_email = result.scalars().first()
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already exists")
-    
-    new_user = models.User(
-        username=user.username,
-        email=user.email,
-    )
-    db.add(new_user)
-    await db.commit()
-    await db.refresh(new_user)
-    return new_user
-
-
-@app.get("/api/users/{user_id}", response_model=UserResponse)
-async def get_user(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.User).where(models.User.id == user_id))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return user
-
-
-@app.get("/api/users/{user_id}/shows", response_model=list[ShowResponse])
-async def get_user_shows(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.Show).where(models.Show.user_id == user_id))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found") 
-    
-    result = await db.execute(select(models.Show).options(selectinload(models.Show.author)).where(models.Show.user_id == user_id))
-    shows = result.scalars().all()
-    return shows
-
-@app.patch("/api/users/{user_id}", response_model=UserResponse)
-async def update_user(user_id: int, user_update: UserUpdate, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.User).where(models.User.id == user_id))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    
-    if user_update.username is not None and user_update.username != user.username:
-        result = await db.execute(select(models.User).where(models.User.username == user_update.username))
-        existing_user = result.scalars().first()
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already exists")
-    if user_update.email is not None and user_update.email != user.email:
-        result = await   db.execute(select(models.User).where(models.User.email == user_update.email))
-        existing_email = result.scalars().first()
-        if existing_email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already exists")
-    
-    update_data = user_update.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(user, field, value)
-    
-    await db.commit()
-    await db.refresh(user)
-    return user
-
-
-@app.delete("/api/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_user(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.User).where(models.User.id == user_id))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    await db.delete(user)
-    await db.commit()
-
-
-@app.get("/api/shows", response_model=list[ShowResponse])
-async def get_shows(db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.Show))
-    shows = result.scalars().all()
-    return shows
-
-
-@app.post("/api/shows", response_model=ShowResponse, status_code=status.HTTP_201_CREATED)
-async def create_show(show: ShowCreate, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.User).where(models.User.id == show.user_id))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-    new_show = models.Show(
-        name=show.name,
-        watch_status=show.watch_status,
-        completeness=show.completeness,
-        review=show.review,
-        user_id=show.user_id,
-    )
-    db.add(new_show)
-    await db.commit()
-    await db.refresh(new_show, attribute_names=["author"])
-    return new_show
-
-
-@app.get("/api/shows/{show_id}", response_model=ShowResponse)
-async def get_show(show_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.Show).where(models.Show.id == show_id))
-    show = result.scalars().first()
-    if not show:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show not found")
-    return show
-
-
-@app.put("/api/shows/{show_id}", response_model=ShowResponse)
-async def update_show_full(show_id: int, show_data:ShowCreate, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.Show).where(models.Show.id == show_id))
-    show = result.scalars().first()
-    if not show:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show not found")
-    
-    if show_data.user_id != show.user_id:
-        result = await db.execute(select(models.User).where(models.User.id == show_data.user_id))
-        user = result.scalars().first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found",
-            )
-    show.name = show_data.name
-    show.watch_status = show_data.watch_status
-    show.completeness = show_data.completeness
-    show.review = show_data.review
-    show.user_id = show_data.user_id
-
-    await db.commit()
-    await db.refresh(show, attribute_names=["author"])
-    return show
-        
-
-@app.patch("/api/shows/{show_id}", response_model=ShowResponse)
-async def update_show_partial(show_id: int, show_data:ShowUpdate, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.Show).where(models.Show.id == show_id))
-    show = result.scalars().first()
-    if not show:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show not found")
-    
-    update_data = show_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(show, field, value)
-    
-    await db.commit()
-    await db.refresh(show, attribute_names=["author"])
-    return show
-
-
-@app.delete("/api/shows/{show_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_show(show_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
-    result = await db.execute(select(models.Show).where(models.Show.id == show_id))
-    show = result.scalars().first()
-    if not show:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show not found")
-    await db.delete(show)
-    await db.commit()
 
 
 @app.exception_handler(StarletteHTTPException)
