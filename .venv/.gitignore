@@ -2,11 +2,6 @@
 
 *.db
 *.sqlite3
-__pycache__/
+__pycache__
 
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-!.vscode/*.code-snippets
+.vscode
