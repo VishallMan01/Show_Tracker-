@@ -36,7 +36,7 @@ class ShowBase(BaseModel):
     review: str = Field(min_length=1)
 
 class ShowCreate(ShowBase):
-    user_id: int
+    pass
 
 class ShowUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)

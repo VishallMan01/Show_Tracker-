@@ -18,19 +18,18 @@
           <small class="text-body-secondary fs-6">{{ show.completeness }}</small>
         </h2>
         <p class="article-content">{{ show.review }}</p>
-        <!-- Only show edit/delete options if user_id is 1 (TEMPORARY - until authentication) -->
-        {% if show.user_id == 1 %}
-            <div class="post-actions mt-3 pt-3 border-top">
-            <button type="button"
-                    class="btn btn-outline-secondary me-1"
-                    data-bs-toggle="modal"
-                    data-bs-target="#editModal">Edit Show</button>
-            <button type="button"
-                    class="btn btn-outline-danger"
-                    data-bs-toggle="modal"
-                    data-bs-target="#deleteModal">Delete Show</button>
-            </div>
-        {% endif %}
+    
+        <div id="postActions" class="post-actions mt-3 pt-3 border-top d-none">
+          <button type="button"
+                  class="btn btn-outline-secondary me-1"
+                  data-bs-toggle="modal"
+                  data-bs-target="#editModal">Edit Show</button>
+          <button type="button"
+                  class="btn btn-outline-danger"
+                  data-bs-toggle="modal"
+                  data-bs-target="#deleteModal">Delete Show</button>
+        </div>            
+          
       </div>
     </div>
   </article>
@@ -63,23 +62,24 @@
                     required>
             </div>
             <div class="mb-3">
-              <label for="editWatchStatus" class="form-label">Watch Status</label>
-              <input type="text"
-                    class="form-control"
-                    id="editWatchStatus"
-                    name="watch_status"
-                    value="{{ show.watch_status }}"
-                    required>
-            </div>
-            <div class="mb-3">
-              <label for="editCompleteness" class="form-label">Completeness</label>
-              <input type="text"
-                    class="form-control"
-                    id="editCompleteness"
-                    name="completeness"
-                    value="{{ show.completeness }}"
-                    required>
-            </div>
+                <label for="watch_status" class="form-label">Watch Status</label>
+                <select class="form-select form-select-sm watch-status-select"
+                      id="watch_status" name="watch_status">
+                  <option value="" disabled selected>Select a status...</option>
+                  <option value="Watched ✅">✅ Watched</option>
+                  <option value="Want to Watch 🔖">🔖 Want to Watch</option>
+                  <option value="Watching ▶️">▶️ Watching</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="completeness" class="form-label">Is the Show Complete or On-going?</label>
+                <select class="form-select form-select-sm watch-status-select"
+                      id="completeness" name="completeness">
+                  <option value="" disabled selected>Select an option...</option>
+                  <option value="Complete ✅">✅ Complete</option>
+                  <option value="On-going 🎥"> 🎥 On-going</option>
+                </select>                
+              </div>
             <div class="mb-3">
               <label for="editReview" class="form-label">Review</label>
               <textarea class="form-control"
@@ -130,96 +130,110 @@
 {% endblock content %}
 
 {% block scripts %}
-  <script type="module">
-    import {
-      getErrorMessage,
-      hideModal,
-      showModal,
-    } from "/static/js/utils.js";
+<script type="module">
+    import { getCurrentUser, getToken } from '/static/js/auth.js';
+    import { getErrorMessage, showModal, hideModal } from '/static/js/utils.js';
 
-    // Get show ID from Jinja2 template
-    const showId = {{ show.id }};
+    const showID = {{ show.id }};
+    const showUserId = {{ show.user_id }};
+
+    // Show edit/delete buttons only if current user owns this post
+    async function checkOwnership() {
+        const user = await getCurrentUser();
+        if (user && user.id === showUserId) {
+            document.getElementById('postActions').classList.remove('d-none');
+        }
+    }
 
     // Edit Post Form Handler
-    const editForm = document.getElementById("editPostForm");
-    editForm.addEventListener("submit", async (event) => {
-      // Stop default form submission - we'll handle it with JavaScript
-      event.preventDefault();
+    const editForm = document.getElementById('editPostForm');
+    editForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
 
-      // Gather form values into a plain object
-      const formData = new FormData(editForm);
-      const postData = Object.fromEntries(formData.entries());
+        const token = getToken();
+        if (!token) { window.location.href = '/login'; return; }
 
-      // Remove post_id from data (it's in the URL, not the body)
-      delete postData.show_id;
+        const formData = new FormData(editForm);
+        const showData = Object.fromEntries(formData.entries());
+        delete showData.show_id;
 
-      try {
-        // PATCH for partial update (just title and content, not user_id)
-        const response = await fetch(`/api/shows/${showId}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(postData),
-        });
+        try {
+            const response = await fetch(`/api/shows/${showID}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify(showData),
+            });
 
-        if (response.ok) {
-          document.getElementById("successMessage").textContent =
-            "Show updated successfully!";
+            if (response.status === 401) { window.location.href = '/login'; return; }
+            if (response.status === 403) {
+                document.getElementById('errorMessage').textContent =
+                    'You are not authorized to edit this show.';
+                hideModal('editModal');
+                showModal('errorModal');
+                return;
+            }
 
-          hideModal("editModal");
-          showModal("successModal");
+            if (response.ok) {
+                document.getElementById('successMessage').textContent =
+                    'Show updated successfully!';
+                hideModal('editModal');
+                showModal('successModal');
 
-          document
-            .getElementById("successModal")
-            .addEventListener(
-              "hidden.bs.modal",
-              () => {
-                window.location.reload();
-              },
-              { once: true },
-            );
-        } else {
-          const error = await response.json();
-          document.getElementById("errorMessage").textContent =
-            getErrorMessage(error);
-
-          hideModal("editModal");
-          showModal("errorModal");
+                document.getElementById('successModal').addEventListener('hidden.bs.modal', () => {
+                    window.location.reload();
+                }, { once: true });
+            } else {
+                const error = await response.json();
+                document.getElementById('errorMessage').textContent = getErrorMessage(error);
+                hideModal('editModal');
+                showModal('errorModal');
+            }
+        } catch (error) {
+            document.getElementById('errorMessage').textContent =
+                'Network error. Please check your connection and try again.';
+            showModal('errorModal');
         }
-      } catch (error) {
-        document.getElementById("errorMessage").textContent =
-          "Network error. Please check your connection and try again.";
-        showModal("errorModal");
-      }
     });
 
-    // Delete Post Handler - listen for click on delete button
-    const deleteButton = document.getElementById("confirmDelete");
-    deleteButton.addEventListener("click", async () => {
-      try {
-        // DELETE request - no body needed, post_id is in the URL
-        const response = await fetch(`/api/shows/${showId}`, {
-          method: "DELETE",
-        });
+    // Delete Post Handler
+    const deleteButton = document.getElementById('confirmDelete');
+    deleteButton.addEventListener('click', async () => {
+        const token = getToken();
+        if (!token) { window.location.href = '/login'; return; }
 
-        // 204 = No Content (success)
-        if (response.status === 204) {
-          // Post is gone, redirect to home page
-          window.location.href = "/";
-        } else {
-          const error = await response.json();
-          document.getElementById("errorMessage").textContent =
-            getErrorMessage(error);
+        try {
+            const response = await fetch(`/api/shows/${showID}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
 
-          hideModal("deleteModal");
-          showModal("errorModal");
+            if (response.status === 401) { window.location.href = '/login'; return; }
+            if (response.status === 403) {
+                document.getElementById('errorMessage').textContent =
+                    'You are not authorized to delete this show.';
+                hideModal('deleteModal');
+                showModal('errorModal');
+                return;
+            }
+
+            if (response.status === 204) {
+                window.location.href = '/';
+            } else {
+                const error = await response.json();
+                document.getElementById('errorMessage').textContent = getErrorMessage(error);
+                hideModal('deleteModal');
+                showModal('errorModal');
+            }
+        } catch (error) {
+            document.getElementById('errorMessage').textContent =
+                'Network error. Please check your connection and try again.';
+            showModal('errorModal');
         }
-      } catch (error) {
-        document.getElementById("errorMessage").textContent =
-          "Network error. Please check your connection and try again.";
-        showModal("errorModal");
-      }
     });
-  </script>
+
+    checkOwnership();
+</script>
 {% endblock scripts %}
