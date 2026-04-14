@@ -36,9 +36,9 @@ app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(shows.router, prefix="/api/shows", tags=["shows"])
 
 
-@app.get("/", include_in_schema=False)
-@app.get("/shows", include_in_schema=False)
-async def root(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
+@app.get("/", include_in_schema=False, name="home")
+@app.get("/shows", include_in_schema=False, name="shows")
+async def home(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
     result = await db.execute(
             select(models.Show)
             .options(selectinload(models.Show.author))
@@ -50,6 +50,7 @@ async def root(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
         "home.html", 
         {"shows": shows, "name": "Home"},
     )
+
 
 @app.get("/shows/{show_id}", include_in_schema=False)
 async def show_page(request: Request, show_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
