@@ -4,3 +4,4 @@ aiosqlite
 pwdlib[argon2]
 pyjwt
 pydantic-settings
+pillow
