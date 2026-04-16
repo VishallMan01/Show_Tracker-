@@ -46,7 +46,7 @@
     <link rel="stylesheet" type="text/css" href="{{ url_for("static", path='css/main.css') }}">
 
     <!-- Set a theme color that matches your website's primary color -->
-    <meta name="theme-color" content="#527c9f">
+    <meta name="theme-color" content="#ff6b00">
 
     <!-- Favicon for all browsers -->
     <link rel="icon" href="{{ url_for("static", path='icons/favicon.ico') }}" sizes="any">
@@ -86,7 +86,7 @@
                 <button class="btn btn-outline-light mb-2 mb-md-0 me-md-2"
                         type="button"
                         data-bs-toggle="modal"
-                        data-bs-target="#createPostModal">New Post</button>
+                        data-bs-target="#createPostModal">New Show</button>
                 <a class="btn btn-light mb-2 mb-md-0 me-md-3"
                   href="{{ url_for("account_page") }}"
                   id="accountBtn">Account</a>
@@ -166,9 +166,9 @@
                 <select class="form-select form-select-sm watch-status-select"
                       id="watch_status" name="watch_status">
                   <option value="" disabled selected>Select a status...</option>
-                  <option value="Watched">✅ Watched</option>
-                  <option value="Want to Watch">🔖 Want to Watch</option>
-                  <option value="Watching">▶️ Watching</option>
+                  <option value="Watched ✅">✅ Watched</option>
+                  <option value="Want to Watch 🔖">🔖 Want to Watch</option>
+                  <option value="Watching ▶️">▶️ Watching</option>
                 </select>
                 </div>
                 <div class="mb-3">
@@ -176,8 +176,8 @@
                 <select class="form-select form-select-sm watch-status-select"
                       id="completeness" name="completeness">
                   <option value="" disabled selected>Select an option...</option>
-                  <option value="Complete">✅ Complete</option>
-                  <option value="On-going">� On-going</option>
+                  <option value="Complete ✅">✅ Complete</option>
+                  <option value="On-going 🎥">🎥 On-going</option>
                 </select>                
                 </div>
                 <div class="mb-3">
