@@ -1,12 +1,17 @@
 Code is inspired by CoreyMSchafer
+
 🎬 Show Tracker API
+
 A REST API built with FastAPI that lets users track shows they've watched, want to watch, watching, and rate/review them. Includes JWT authentication.
 
 🚀 Tech Stack
 
 FastAPI — web framework
+
 SQLAlchemy — ORM
+
 Pydantic — data validation
+
 JWT and pwdlib - password hashing & JWT auth 
 
 
